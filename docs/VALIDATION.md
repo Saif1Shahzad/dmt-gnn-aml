@@ -13,4 +13,6 @@ Date: November 3, 2026. Host: macOS ARM64, CPU. Real IBM/XBlock datasets were no
 
 All generated verification artifacts are under gitignored `runs/`. The exact installed Python packages are recorded in `requirements-tested.txt`.
 
-Not verified here: full-scale datasets, official baseline reproductions, GPU/MPS execution, Docker build, remote GitHub Actions execution, or any claimed scientific improvement. See PROTOCOL.md for explicit departures from the proposed methodology.
+GitHub Actions subsequently passed on published commit `218d5be748de343a5e39fadee9691cfd8db59f11`: [causal-pipeline-tests run](https://github.com/Saif1Shahzad/dmt-gnn-aml/actions/runs/41573751287). The workflow installs dependencies on Ubuntu with Python 3.12, runs the regression suite, and executes the smoke workflow.
+
+Not verified here: full-scale datasets, official baseline reproductions, GPU/MPS execution, Docker build, or any claimed scientific improvement. See PROTOCOL.md for explicit departures from the proposed methodology.

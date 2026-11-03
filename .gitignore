@@ -8,3 +8,5 @@ runs/
 *.db
 *.db-journal
 .DS_Store
+config.bat
+node_modules
