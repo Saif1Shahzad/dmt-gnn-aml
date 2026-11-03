@@ -1,0 +1,8 @@
+# Edit these values to match the header of your transaction CSV export.
+# Labels live in a separate address,label CSV, never in input features.
+src: from_address
+dst: to_address
+timestamp: timestamp
+amount: value
+fee: fee
+category: transaction_type

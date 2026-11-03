@@ -1,0 +1,22 @@
+seed: 42
+seeds: [42, 101, 202, 303, 404]
+device: cpu  # Set cuda on an NVIDIA machine; mps is available on supported Macs.
+threads: 1
+epochs: 10
+patience: 3
+lr: 0.001
+weight_decay: 0.00001
+batch_size: 200  # Truncated backprop interval; timestamp groups are never broken.
+grad_clip: 1.0
+sampling_budget: 10
+alpha: 0.75
+gamma: 2.0
+loss: focal
+model:
+  variant: dmt
+  hidden: 64
+  time_dim: 16
+  dropout: 0.1
+  heads: 4
+variants: [dmt, merged, no_direction, no_memory, tgn_reference, multignn_reference]
+offered_rates: [10, 100, 1000]

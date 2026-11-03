@@ -1,0 +1,13 @@
+seed: 42
+device: cpu
+threads: 1
+epochs: 2
+patience: 2
+batch_size: 20
+sampling_budget: 5
+model:
+  variant: dmt
+  hidden: 16
+  time_dim: 8
+  heads: 4
+  dropout: 0.0

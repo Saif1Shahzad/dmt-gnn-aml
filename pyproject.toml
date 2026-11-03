@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dmt-gnn-aml"
+version = "0.1.0"
+description = "Causal directed multigraph temporal learning and streaming AML experiments"
+requires-python = ">=3.10"
+dependencies = ["torch>=2.2,<3", "numpy>=1.26,<3", "pandas>=2.1,<3", "scikit-learn>=1.4,<2", "scipy>=1.12,<2", "PyYAML>=6,<7", "xgboost>=2,<4", "optuna>=3.6,<5", "matplotlib>=3.8,<4"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+dmtgnn = "dmtgnn.bootstrap:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
