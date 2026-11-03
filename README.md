@@ -1,157 +1,265 @@
-# DMT-GNN AML
+<div align="center">
 
-**Directed Multigraph Temporal Graph Neural Networks for streaming anti-money-laundering research.**
+# DMT-GNN · AML
 
-An executable reference implementation of the Phase 2 research plan by Saif Shahzad and Shahoud Shahid. It supports IBM AML transaction classification and XBlock Ethereum address classification, with strict temporal causality, repeatable experiments and measured streaming simulation.
+### Directed Multigraph Temporal Learning for Anti-Money Laundering
 
-## Included
+Preserve every transfer. Learn from the past. Measure the cost of freshness.
 
-- Disk-backed CSV preprocessing, immutable manifests and SHA-256 source provenance.
-- Train-only feature transforms, chronological 60/20/20 splits, preserved parallel transfers, unknown-label masks.
-- Hierarchical directional attention, harmonic time encoding, GRU memory and focal loss.
-- Merged-edge, no-direction, no-memory, single-stage and BCE controls; configurable sampling budgets.
-- XGBoost with causal graph features; explicitly named internal TGN/Multi-GNN reference controls.
-- Validation-only Optuna search, five-seed suites, checkpointing and validation-calibrated thresholds.
-- Event/micro-batch/time-bucket replay with Poisson offered load, FIFO queue simulation and latency percentiles.
-- Minority F1, precision/recall, average precision, MCC, P@k, paired block bootstrap, Wilcoxon, Holm and effect sizes.
-- Error/stratum exports, quality–latency plots, and causal event-deletion case studies.
-- Causality/gradient/integration tests, CI, Docker, and toy data for checking the pipeline before downloading anything.
+[![CI](https://github.com/Saif1Shahzad/dmt-gnn-aml/actions/workflows/tests.yml/badge.svg)](https://github.com/Saif1Shahzad/dmt-gnn-aml/actions/workflows/tests.yml)
+![Version](https://img.shields.io/badge/version-0.1.0-2563eb)
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-temporal_GNN-EE4C2C?logo=pytorch&logoColor=white)
+![Stage](https://img.shields.io/badge/stage-experiment_preparation-f59e0b)
 
-**Read [the protocol](docs/PROTOCOL.md) before interpreting results.** The internal TGN/Multi-GNN controls are not official reproductions; optional MEGA-GNN is not integrated. The event loop is a correctness-first reference and has not been benchmarked on full IBM/XBlock datasets. Real-data training results are not bundled.
+**[Quick start](#quick-start)** · **[Current progress](#current-progress)** · **[Experiment guide](docs/EXPERIMENTS.md)** · **[Research protocol](docs/PROTOCOL.md)**
 
-## 1. Install and verify
+</div>
 
-Use Python 3.12+ (3.12 is the CI/Docker target). On macOS, install the XGBoost runtime once with `brew install libomp`:
+---
+
+## Overview
+
+Money laundering is a pattern across transfers, counterparties, and time. Collapsing repeated transfers into one edge can remove information about how that pattern develops. Updating a detector less frequently can also change what it knows when an event arrives.
+
+**DMT-GNN AML** is a research implementation for studying both effects. It combines directional multigraph attention with continuous-time features and recurrent node memory, then evaluates the trade-off between detection quality, information freshness, and processing latency.
+
+The project implements the Phase 2 research plan by **Saif Shahzad** and **Shahoud Shahid**, with two intended evaluation domains:
+
+| Dataset | Prediction task | Role in the study |
+| :--- | :--- | :--- |
+| **IBM AML HI-Small** | Is this transfer laundering? | Synthetic financial transaction benchmark |
+| **XBlock Ethereum** | Is this address labeled malicious? | Real-world cryptocurrency address benchmark |
+
+> [!IMPORTANT]
+> **Current stage: the research pipeline is implemented and verified on synthetic fixtures.** Full IBM/XBlock experiments have not yet been run. This repository does not claim benchmark accuracy, production latency, or superiority over published methods.
+
+## Current progress
+
+**Progress snapshot · November 3, 2026**
+
+| Workstream | Status | Evidence or next step |
+| :--- | :---: | :--- |
+| Research scope and protocol | ✅ Documented | [Methodology mapping](docs/TRACEABILITY.md) and explicit implementation decisions |
+| Data ingestion and temporal splits | ✅ Implemented | IBM adapter, configurable XBlock import, train-only scaling, preserved parallel edges |
+| DMT-GNN and ablations | ✅ Implemented | Hierarchical attention, harmonic time features, GRU memory, edge/node heads |
+| Training and validation | ✅ Verified on fixtures | Checkpoint reload, calibrated thresholds, early stopping, recurrent gradient checks |
+| Baseline controls | ✅ Implemented | XGBoost, merged DMT, and clearly labeled internal TGN/Multi-GNN controls |
+| Streaming evaluation | ✅ Verified on fixtures | Event, micro-batch, time-bucket, and XGBoost refresh replay |
+| Tuning and comparisons | ✅ Smoke-verified | One Optuna trial; a two-seed, two-variant suite with paired analysis |
+| Local regression suite | ✅ 18 tests passed | Causality, preprocessing, model variants, training, metrics, and replay |
+| GitHub Actions | ✅ Passed on published code | [Verified CI run](https://github.com/Saif1Shahzad/dmt-gnn-aml/actions/runs/41573751287); live badge above |
+| Full IBM/XBlock evaluation | ⏳ Pending | Acquire data, validate schemas, profile a representative pilot |
+| Official baseline reproductions | ⏳ Pending | Internal controls are not official TGN/Multi-GNN implementations; MEGA is not integrated |
+| Scientific results and manuscript | ⏳ Pending | Complete frozen-protocol runs before drawing conclusions |
+
+The [validation record](docs/VALIDATION.md) distinguishes completed checks from unverified hardware, scale, and research claims.
+
+## How the pipeline works
+
+```mermaid
+flowchart LR
+    A["Transaction ledger<br/>and label registry"] --> B["Chronological split<br/>Train-only transforms"]
+    B --> C["Strictly past<br/>directional histories"]
+    C --> D["Parallel-transfer<br/>attention"]
+    D --> E["Counterparty<br/>attention"]
+    M[("Node memory")] --> E
+    E --> F["Edge or address<br/>prediction"]
+    F --> G["Post-score<br/>GRU update"]
+    G --> M
+    F --> H["Classification metrics<br/>and streaming replay"]
+
+    classDef input fill:#eff6ff,stroke:#2563eb,color:#172554;
+    classDef model fill:#f0fdfa,stroke:#0d9488,color:#134e4a;
+    classDef output fill:#fffbeb,stroke:#d97706,color:#78350f;
+    class A,B,C input;
+    class D,E,M,G model;
+    class F,H output;
+```
+
+**The causal rule:** score an event before allowing it to update memory. Events with the same timestamp are scored from the same prior state; sampled neighbors must have strictly earlier timestamps.
+
+The pipeline also keeps negative examples, learns transforms only from training data, and selects thresholds and hyperparameters on validation data. Test labels never enter the graph memory. These behaviors have regression coverage in [`tests/test_pipeline.py`](tests/test_pipeline.py).
+
+## Quick start
+
+**Recommended environment:** Python 3.12, a virtual environment, and a POSIX shell. The package declares Python 3.10+ support; CI and Docker target 3.12.
 
 ```bash
+git clone https://github.com/Saif1Shahzad/dmt-gnn-aml.git
+cd dmt-gnn-aml
+
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
 source scripts/activate.sh
+
 python -m pytest -q
 bash scripts/smoke.sh
 ```
 
-In the original development checkout, a `.venv` is already installed; fresh clones should follow the installation commands above. `source scripts/activate.sh` activates it, keeps plotting caches local, and selects PyTorch's bundled OpenMP on macOS to avoid mixing incompatible runtimes. The CLI applies the same selection before importing numerical libraries. Use `python -m pytest`, not a shell-launched pytest executable, on macOS. A system runtime can also be installed with `brew install libomp`. Linux needs its OpenMP runtime (included in the Docker image).
+The smoke workflow generates independent toy data and completes preparation → training → evaluation → replay → reporting. It requires no benchmark download.
 
-The smoke workflow creates independent toy transfers, trains, evaluates, replays, and writes `runs/smoke/report/results.csv` and `quality_latency.png`. Toy metrics are only a software test. Output directories must be new to avoid silently overwriting experiments; use `bash scripts/smoke.sh runs/smoke2` to repeat.
+```text
+runs/smoke/
+├── data/                  Prepared toy events and provenance
+├── model/                 Checkpoint, validation metrics, and training history
+├── test/                  Held-out predictions and metrics
+├── replay/                Predictions, queue timing, and freshness measurements
+└── report/                Results table and quality–latency plot
+```
 
-`requirements-tested.txt` records the exact dependencies tested on this Mac, not a universal cross-platform lock. `pyproject.toml` defines supported dependency ranges; every run records its configuration and key runtime versions. CUDA PyTorch builds should be installed for the target GPU environment before installing this project.
+> [!TIP]
+> Each run needs a fresh output directory. To repeat the smoke workflow, use `bash scripts/smoke.sh runs/smoke2`. Generated data, environments, checkpoints, and results are ignored by Git.
 
-## 2. Download and prepare IBM HI-Small
+<details>
+<summary><strong>Platform and dependency notes</strong></summary>
 
-Download the original **HI-Small_Trans.csv** from the [IBM AML data release](https://github.com/IBM/AML-Data), which links the distribution. Keep it under `data/raw/ibm/`. No data are committed; the dataset has its own license, independent of code.
+- **macOS:** the activation script and CLI launcher select PyTorch's bundled OpenMP runtime before numerical libraries load. This avoids the PyTorch/XGBoost runtime conflict encountered during local verification. Use `python -m pytest` after activation. If a system OpenMP runtime is needed, install it with `brew install libomp`.
+- **Linux:** the OpenMP runtime must be available; the supplied Dockerfile installs `libgomp1`.
+- **NVIDIA GPU:** install the appropriate CUDA-enabled PyTorch build, then set `device: cuda` in a copied configuration. GPU and MPS execution have not been verified in this project.
+- **Reproducibility:** [`requirements-tested.txt`](requirements-tested.txt) records the tested Mac environment; it is not a universal platform lock. [`pyproject.toml`](pyproject.toml) defines dependency ranges.
+- **Containers:** a [`Dockerfile`](Dockerfile) and [Conda environment specification](configs/environment.yml) are supplied. The Docker build has not yet been verified.
+
+</details>
+
+## From downloaded data to an experiment
+
+For IBM, place the original `HI-Small_Trans.csv` under `data/raw/ibm/` and run:
 
 ```bash
+# 1. Preserve transfers and create chronological train/validation/test partitions.
 dmtgnn prepare --format ibm \
   --input data/raw/ibm/HI-Small_Trans.csv \
   --out data/processed/ibm
-```
 
-The parser understands the two identically named `Account` columns by position and uses `(bank, account)` identifiers. It uses Amount Paid, Payment Currency and Payment Format; the dataset supplies no transfer fee, so fee is zero. The label is `Is Laundering`. Parallel edges and negative examples are retained. Sorting happens in SQLite, followed by memory-mapped arrays.
-
-See [DATASETS.md](docs/DATASETS.md) for XBlock, schema mappings, typology annotations, label policies and provenance.
-
-## 3. Train, then evaluate
-
-```bash
+# 2. Train and select a checkpoint using validation data.
 dmtgnn train --data data/processed/ibm \
-  --config configs/default.yaml --out runs/ibm/dmt/seed_42
+  --config configs/default.yaml \
+  --out runs/ibm/dmt/seed_42
 
+# 3. Evaluate the frozen checkpoint and validation-selected threshold.
 dmtgnn evaluate --data data/processed/ibm \
   --checkpoint runs/ibm/dmt/seed_42/checkpoint.pt \
   --out runs/ibm/dmt/seed_42/test
 ```
 
-Set `device: cuda` in a copied config on an NVIDIA machine. Start with a representative pilot to estimate runtime and memory. The default has 10 epochs, early stopping, S=10, H=64, four attention heads and seed 42. The supplied smoke config is for software verification only.
+For XBlock, the importer expects a transaction CSV plus an explicit `address,label` registry. Column mappings and a trusted NetworkX multigraph converter are provided; unknown addresses remain unlabeled rather than automatically becoming negatives.
 
-Training writes `checkpoint.pt`, validation predictions/metrics, epoch history, config and environment. Evaluation reconstructs causal memory from the preceding train+validation stream without using its labels, then writes frozen-threshold test predictions/metrics. Only load checkpoints you created or trust.
+**Continue with the [dataset contracts](docs/DATASETS.md) and [complete experiment guide](docs/EXPERIMENTS.md)** for XBlock preparation, tuning, five-seed suites, streaming sweeps, statistics, and case studies.
 
-## 4. Tune and run the planned comparisons
+## Experiment design
 
-```bash
-dmtgnn tune --data data/processed/ibm --config configs/default.yaml \
-  --trials 20 --out runs/ibm/tuning
+### Models and controlled comparisons
 
-dmtgnn suite --data data/processed/ibm \
-  --config runs/ibm/tuning/best_config.json --out runs/ibm/suite
-```
+| Model / option | What it tests |
+| :--- | :--- |
+| `dmt` | Hierarchical directed multigraph learning with temporal memory |
+| `merged` | Loss of parallel-transfer detail within sampled histories |
+| `no_direction` | Shared directional weights and symmetric message pooling |
+| `no_memory` | Local historical structure without recurrent node memory |
+| `single_stage` | Edge aggregation without per-counterparty hierarchy |
+| `tgn_reference` | Internal simple-history temporal memory control |
+| `multignn_reference` | Internal directional, edge-attribute, port/order control |
+| `xgboost` command | Tabular learning from event attributes and causal graph features |
+| `loss: bce` / sampling budget | Loss-function and neighborhood-size controls |
 
-The suite trains every configured variant at seeds 42, 101, 202, 303 and 404, then evaluates frozen checkpoints. Ablations share the chosen configuration. For fair independently tuned baseline comparisons, tune each model separately by setting `model.variant` in its config; do not claim identical tuning budgets if only DMT was tuned. No test results enter Optuna.
+The default suite includes DMT, merged, no-direction, no-memory, and both internal reference controls. Single-stage, BCE, and alternate sampling budgets are selected separately through configuration.
 
-Add `--streaming` to run the predeclared event/batch/bucket/rate matrix for every seed and model. This is a large workload; run a pilot first. To run one condition:
+### Planned operating conditions
 
-```bash
-dmtgnn replay --data data/processed/ibm \
-  --checkpoint runs/ibm/dmt/seed_42/checkpoint.pt \
-  --mode batch --batch-size 50 --rate 100 \
-  --out runs/ibm/dmt/seed_42/stream_batch50_rate100
-```
+| Dimension | Configured protocol |
+| :--- | :--- |
+| Temporal partition | Approximately **60 / 20 / 20**, with timestamp groups kept together |
+| Random seeds | **42, 101, 202, 303, 404** |
+| Hyperparameter search | Up to **20** validation-only Optuna TPE trials |
+| Neural refresh | Event; batches of **10 / 50 / 100**; ledger-time buckets of **60 / 600 / 3600 s** |
+| Offered arrival rates | **10 / 100 / 1000 events/s** by default |
+| Tabular refresh study | Every **100 / 1000 / 10000** events |
+| Primary model defaults | Hidden size **64**, **4** attention heads, **10** historical transfers per direction |
 
-For time buckets use `--mode bucket --bucket-seconds 600`; event mode is `--mode event`. Equal-timestamp events are always scored together before updates. Inference latency and simulated end-to-end latency are distinct outputs. `detection_delay` is null without incident onset annotations.
+These settings define experiments to run; they are not completed benchmark results. Profile a representative pilot before launching the full matrix. The implementation uses a correctness-first event loop, so full-scale runtime and memory must be measured.
 
-XGBoost uses the same prepared inputs:
+### Outputs and measurements
 
-```bash
-dmtgnn xgboost --data data/processed/ibm --refresh 100 --seed 42 \
-  --evaluate-test --out runs/ibm/xgboost_r100/seed_42
-```
+| Area | Available outputs |
+| :--- | :--- |
+| Detection quality | Minority precision, recall, F1, average precision, MCC, and P@100/500 |
+| Streaming behavior | Measured inference/service latency, simulated FIFO queue delay, p50/p95/p99, throughput, and staleness |
+| Statistical comparison | Paired seed/time-block bootstrap, Wilcoxon tests, Holm correction, Cliff's delta, and rank-biserial correlation |
+| Diagnostics | Top false positives/negatives; temporal, degree, multiplicity, and available typology strata |
+| Case studies | True-positive causal prefix replay with selected historical events deleted |
+| Reproducibility | Source hashes, data manifests, configuration, environment details, checkpoints, and prediction CSVs |
 
-Repeat at refresh 100/1000/10000 and the five seeds as predeclared. Use `dmtgnn replay-xgboost --data data/processed/ibm --model-dir runs/ibm/xgboost_r100/seed_42 --rate 100 --out runs/ibm/xgboost_r100/seed_42/replay` for queued systems replay with the same frozen refresh policy. The XGBoost feature cache is disk-backed, but training still needs RAM.
+Average precision is the implementation's explicit PR-AUC definition. Inference latency and simulated end-to-end latency are reported separately. Incident detection delay remains unavailable without incident onset annotations.
 
-## 5. Analyse and export
+## Roadmap
 
-For a completed suite, `python scripts/analyze_suite.py --suite runs/ibm/suite --out runs/ibm/comparisons` automatically pairs the five seeds, reads their validation thresholds, computes bootstrap comparisons, and applies Holm correction across baselines.
+- [x] Translate the Phase 2 plan into a documented experiment protocol.
+- [x] Implement causal ingestion, the proposed model, controls, and training workflows.
+- [x] Verify edge and node tasks on synthetic fixtures.
+- [x] Add streaming replay, statistical analysis, diagnostics, and case studies.
+- [x] Publish the repository and pass the initial GitHub CI run.
+- [ ] Acquire and audit the intended IBM and XBlock releases.
+- [ ] Profile representative workloads and validate the selected GPU environment.
+- [ ] Complete full tuning and the five-seed benchmark matrix.
+- [ ] Reproduce official baselines under matched data and evaluation protocols.
+- [ ] Add authoritative typology/incident annotations where available.
+- [ ] Produce empirical comparison tables, figures, and the research manuscript.
 
-```bash
-dmtgnn report --runs runs/ibm --out runs/ibm/report
+## Documentation and code map
 
-dmtgnn diagnostics --predictions runs/ibm/dmt/seed_42/test/predictions.csv \
-  --threshold 0.5 --out runs/ibm/dmt/seed_42/diagnostics
-```
+| Start here | Purpose |
+| :--- | :--- |
+| [Dataset contracts](docs/DATASETS.md) | Formats, label policies, units, importers, and provenance |
+| [Experiment guide](docs/EXPERIMENTS.md) | Commands for training, tuning, replay, comparison, and reporting |
+| [Research protocol](docs/PROTOCOL.md) | Causality, model decisions, evaluation units, and known limitations |
+| [Validation record](docs/VALIDATION.md) | What has actually been checked |
+| [Requirement traceability](docs/TRACEABILITY.md) | Mapping from the research document to implementation |
+| [Source provenance](docs/SOURCE.md) | Research-plan authorship and document hash |
 
-Replace `0.5` with the frozen threshold in that run's `validation_metrics.json`. For address classification add `--task node`.
-
-Create a JSON list with one pair per seed:
-
-```json
-[
-  {"a": "runs/dmt/seed_42/test/predictions.csv",
-   "b": "runs/merged/seed_42/test/predictions.csv",
-   "threshold_a": 0.47, "threshold_b": 0.38}
-]
-```
-
-The paths and thresholds above illustrate the schema; use actual paths and validation thresholds, and include all five seeds.
-
-```bash
-dmtgnn compare --pairs pairs.json --resamples 1000 --blocks 10 --out comparison.json
-dmtgnn holm --pvalues 0.031 0.12 0.25
-```
-
-Use actual paired-test p-values in the Holm command. Comparisons reject mismatched target IDs, timestamps and labels. Reports contain CSV tables and a quality/latency scatter plot if replay runs exist.
-
-For a true-positive test alert, `dmtgnn explain --data ... --checkpoint ... --event-id SOURCE_ROW_ID --out explanation.json` replays the prefix with each sampled candidate event removed. Node tasks also require `--entity INTEGER_NODE_ID`. This is an expensive qualitative diagnostic, not GNNExplainer.
-
-## Repository map
+<details>
+<summary><strong>Explore the repository structure</strong></summary>
 
 ```text
-src/dmtgnn/
-  data.py          CSV adapters, train-only transforms, disk-backed graph
-  model.py         causal state, hierarchical attention, GRU, ablations
-  engine.py        train/validate/test lifecycle and checkpoints
-  streaming.py     measured-service FIFO simulation and freshness policies
-  tabular.py       XGBoost graph-feature control
-  metrics.py       label masks, address reduction, classification metrics
-  experiments.py   Optuna and fixed-seed experiment matrix
-  analysis.py      bootstrap, significance tests, diagnostics, plots
-  explain.py       causal deletion-replay case studies
-  synthetic.py     independent toy fixtures
-  cli.py           command-line interface
-configs/           default, smoke and XBlock mappings
-scripts/           smoke workflow, local activation, XBlock graph conversion
-tests/            causal and end-to-end regression checks
-docs/             protocol, dataset contract, requirement traceability
+dmt-gnn-aml/
+├── src/dmtgnn/
+│   ├── data.py            CSV adapters, temporal splits, and feature transforms
+│   ├── model.py           Causal state, attention, memory, and ablations
+│   ├── engine.py          Training, validation, evaluation, and checkpoints
+│   ├── streaming.py       Neural replay and measured-service queue simulation
+│   ├── tabular.py         XGBoost training and streaming replay
+│   ├── experiments.py     Optuna search and fixed-seed experiment suites
+│   ├── metrics.py         Classification metrics and address-level reduction
+│   ├── analysis.py        Paired statistics, diagnostics, and figures
+│   ├── explain.py         Causal event-deletion case studies
+│   ├── synthetic.py       Independent verification fixtures
+│   ├── bootstrap.py       Platform-aware command launcher
+│   ├── cli.py             Experiment command-line interface
+│   └── utils.py           Configuration, seeding, hashing, and serialization
+├── configs/               Model settings and dataset column mappings
+├── scripts/               Activation, smoke runs, suite analysis, and conversion
+├── tests/                 Causality and integration regression coverage
+├── docs/                  Research protocol and experiment documentation
+├── .github/workflows/     Automated verification
+└── Dockerfile             Container environment definition
 ```
 
-Public repository: [Saif1Shahzad/dmt-gnn-aml](https://github.com/Saif1Shahzad/dmt-gnn-aml). Dataset files, virtual environments, model artifacts and results are ignored by Git.
+</details>
+
+## Research boundaries
+
+The internal TGN/Multi-GNN controls must not be presented as official reproductions. MEGA-GNN is not integrated. Causal deletion replay is a qualitative diagnostic, not GNNExplainer. Address labels are retrospective unless their availability times are explicitly modeled. Queue results come from a measured-service simulation, not a deployed monitoring service.
+
+The original research document is retained outside this repository. Benchmark data and their licenses are separate from the implementation; no benchmark dataset or real-data trained checkpoint is distributed here. Full details are in the [protocol](docs/PROTOCOL.md).
+
+---
+
+<div align="center">
+
+**Saif Shahzad · Shahoud Shahid**<br>
+Computer Networks Research Project · FAST-NUCES · 2026
+
+[Explore the code](src/dmtgnn) · [Read the protocol](docs/PROTOCOL.md) · [View CI](https://github.com/Saif1Shahzad/dmt-gnn-aml/actions)
+
+</div>
