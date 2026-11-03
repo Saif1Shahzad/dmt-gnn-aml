@@ -32,7 +32,7 @@ python -m pytest -q
 bash scripts/smoke.sh
 ```
 
-A `.venv` is already installed in this local checkout. `source scripts/activate.sh` activates it, keeps plotting caches local, and selects PyTorch's bundled OpenMP on macOS to avoid mixing incompatible runtimes. The CLI applies the same selection before importing numerical libraries. Use `python -m pytest`, not a shell-launched pytest executable, on macOS. A system runtime can also be installed with `brew install libomp`. Linux needs its OpenMP runtime (included in the Docker image).
+In the original development checkout, a `.venv` is already installed; fresh clones should follow the installation commands above. `source scripts/activate.sh` activates it, keeps plotting caches local, and selects PyTorch's bundled OpenMP on macOS to avoid mixing incompatible runtimes. The CLI applies the same selection before importing numerical libraries. Use `python -m pytest`, not a shell-launched pytest executable, on macOS. A system runtime can also be installed with `brew install libomp`. Linux needs its OpenMP runtime (included in the Docker image).
 
 The smoke workflow creates independent toy transfers, trains, evaluates, replays, and writes `runs/smoke/report/results.csv` and `quality_latency.png`. Toy metrics are only a software test. Output directories must be new to avoid silently overwriting experiments; use `bash scripts/smoke.sh runs/smoke2` to repeat.
 
@@ -154,4 +154,4 @@ tests/            causal and end-to-end regression checks
 docs/             protocol, dataset contract, requirement traceability
 ```
 
-No GitHub remote is configured by this local setup. Dataset files, virtual environments, model artifacts and results are ignored by Git.
+Public repository: [Saif1Shahzad/dmt-gnn-aml](https://github.com/Saif1Shahzad/dmt-gnn-aml). Dataset files, virtual environments, model artifacts and results are ignored by Git.
